@@ -3,7 +3,7 @@ require 'test_helper'
 class WxPay::ResultTest < MiniTest::Test
   def test_success_method_with_true
     r = WxPay::Result.new(
-      Hash.from_xml(
+      WxPay::Utils.xml_to_hash(
         <<-XML
         <xml>
           <return_code>SUCCESS</return_code>
@@ -17,7 +17,7 @@ class WxPay::ResultTest < MiniTest::Test
 
   def test_success_method_with_false
     r = WxPay::Result.new(
-      Hash.from_xml(
+      WxPay::Utils.xml_to_hash(
         <<-XML
         <xml>
         </xml>

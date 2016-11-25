@@ -1,8 +1,7 @@
-require 'rest_client'
+require 'net/http'
 require 'json'
 require 'cgi'
 require 'securerandom'
-require 'active_support/core_ext/hash/conversions'
 
 module WxPay
   module Service
@@ -14,15 +13,23 @@ module WxPay
     end
 
     def self.authenticate(authorization_code, options = {})
-      options = WxPay.extra_rest_client_options.merge(options)
+      options = WxPay.extra_http_client_options.merge(options)
       url = "https://api.weixin.qq.com/sns/oauth2/access_token?appid=#{WxPay.appid}&secret=#{WxPay.appsecret}&code=#{authorization_code}&grant_type=authorization_code"
 
-      ::JSON.parse(RestClient::Request.execute(
-        {
-          method: :get,
-          url: url
-        }.merge(options)
-      ), quirks_mode: true)
+      # ::JSON.parse(RestClient::Request.execute(
+      #   {
+      #     method: :get,
+      #     url: url
+      #   }.merge(options)
+      # ), quirks_mode: true)
+
+      # TODO use options
+      res = Net::HTTP.get(URI(url))
+      if res.is_a?(Net::HTTPSuccess)
+        ::JSON.parse(res.body)
+      else
+        raise "Caught error when call weixin."
+      end
     end
 
     INVOKE_UNIFIEDORDER_REQUIRED_FIELDS = [:body, :out_trade_no, :total_fee, :spbill_create_ip, :notify_url, :trade_type]
@@ -36,13 +43,13 @@ module WxPay
 
       check_required_options(params, INVOKE_UNIFIEDORDER_REQUIRED_FIELDS)
 
-      r = WxPay::Result.new(Hash.from_xml(invoke_remote("#{GATEWAY_URL}/pay/unifiedorder", make_payload(params), options)))
+      r = WxPay::Result.new(request_weixin("/pay/unifiedorder", params, options))
 
       yield r if block_given?
 
       r
     end
-    
+
     INVOKE_CLOSEORDER_REQUIRED_FIELDS = [:out_trade_no]
     def self.invoke_closeorder(params, options = {})
       params = {
@@ -50,11 +57,11 @@ module WxPay
         mch_id: options.delete(:mch_id) || WxPay.mch_id,
         key: options.delete(:key) || WxPay.key,
         nonce_str: SecureRandom.uuid.tr('-', '')
-      }.merge(params)  
+      }.merge(params)
 
       check_required_options(params, INVOKE_CLOSEORDER_REQUIRED_FIELDS)
 
-      r = WxPay::Result.new(Hash.from_xml(invoke_remote("#{GATEWAY_URL}/pay/closeorder", make_payload(params), options)))
+      r = WxPay::Result.new(request_weixin("/pay/closeorder", params, options))
 
       yield r if block_given?
 
@@ -112,7 +119,7 @@ module WxPay
         verify_ssl: OpenSSL::SSL::VERIFY_NONE
       }.merge(options)
 
-      r = WxPay::Result.new(Hash.from_xml(invoke_remote("#{GATEWAY_URL}/secapi/pay/refund", make_payload(params), options)))
+      r = WxPay::Result.new(request_weixin("/secapi/pay/refund", params, options))
 
       yield r if block_given?
 
@@ -129,7 +136,7 @@ module WxPay
 
       check_required_options(params, ORDER_QUERY_REQUIRED_FIELDS)
 
-      r = WxPay::Result.new(Hash.from_xml(invoke_remote("#{GATEWAY_URL}/pay/refundquery", make_payload(params), options)))
+      r = WxPay::Result.new(request_weixin("/pay/refundquery", params, options))
 
       yield r if block_given?
 
@@ -152,7 +159,7 @@ module WxPay
         verify_ssl: OpenSSL::SSL::VERIFY_NONE
       }.merge(options)
 
-      r = WxPay::Result.new(Hash.from_xml(invoke_remote("#{GATEWAY_URL}/mmpaymkttransfers/promotion/transfers", make_payload(params), options)))
+      r = WxPay::Result.new(request_weixin("/mmpaymkttransfers/promotion/transfers", params, options))
 
       yield r if block_given?
 
@@ -175,7 +182,7 @@ module WxPay
         verify_ssl: OpenSSL::SSL::VERIFY_NONE
       }.merge(options)
 
-      r = WxPay::Result.new(Hash.from_xml(invoke_remote("#{GATEWAY_URL}/secapi/pay/reverse", make_payload(params), options)))
+      r = WxPay::Result.new(request_weixin("/secapi/pay/reverse", params, options))
 
       yield r if block_given?
 
@@ -198,7 +205,7 @@ module WxPay
         verify_ssl: OpenSSL::SSL::VERIFY_NONE
       }.merge(options)
 
-      r = WxPay::Result.new(Hash.from_xml(invoke_remote("#{GATEWAY_URL}/pay/micropay", make_payload(params), options)))
+      r = WxPay::Result.new(request_weixin("/pay/micropay", params, options))
 
       yield r if block_given?
 
@@ -214,7 +221,7 @@ module WxPay
       }.merge(params)
 
 
-      r = WxPay::Result.new(Hash.from_xml(invoke_remote("#{GATEWAY_URL}/pay/orderquery", make_payload(params), options)))
+      r = WxPay::Result.new(request_weixin("/pay/orderquery", params, options))
       check_required_options(params, ORDER_QUERY_REQUIRED_FIELDS)
 
       yield r if block_given?
@@ -232,7 +239,7 @@ module WxPay
 
       check_required_options(params, DOWNLOAD_BILL_REQUIRED_FIELDS)
 
-      r = invoke_remote("#{GATEWAY_URL}/pay/downloadbill", make_payload(params), options)
+      r = request_weixin("/pay/downloadbill", params, options.dup.merge(not_to_hash: true))
 
       yield r if block_given?
 
@@ -254,13 +261,13 @@ module WxPay
         verify_ssl: OpenSSL::SSL::VERIFY_NONE
       }.merge(options)
 
-      r = WxPay::Result.new(Hash.from_xml(invoke_remote("#{GATEWAY_URL}/mmpaymkttransfers/sendgroupredpack", make_payload(params), options)))
+      r = WxPay::Result.new(request_weixin("/mmpaymkttransfers/sendgroupredpack", params, options))
 
       yield r if block_given?
 
       r
     end
-    
+
     def self.sendredpack(params, options={})
       params = {
         wxappid: options.delete(:appid) || WxPay.appid,
@@ -276,7 +283,7 @@ module WxPay
         verify_ssl: OpenSSL::SSL::VERIFY_NONE
       }.merge(options)
 
-      r = WxPay::Result.new(Hash.from_xml(invoke_remote("#{GATEWAY_URL}/mmpaymkttransfers/sendredpack", make_payload(params), options)))
+      r = WxPay::Result.new(request_weixin("/mmpaymkttransfers/sendredpack", params, options))
 
       yield r if block_given?
 
@@ -299,17 +306,39 @@ module WxPay
         "<xml>#{params.map { |k, v| "<#{k}>#{v}</#{k}>" }.join}<sign>#{sign}</sign></xml>"
       end
 
-      def invoke_remote(url, payload, options = {})
-        options = WxPay.extra_rest_client_options.merge(options)
+      def request_weixin(url, params, options = {})
+        options = WxPay.extra_http_client_options.merge(options)
 
-        RestClient::Request.execute(
-          {
-            method: :post,
-            url: url,
-            payload: payload,
-            headers: { content_type: 'application/xml' }
-          }.merge(options)
-        )
+        # RestClient::Request.execute(
+        #   {
+        #     method: :post,
+        #     url: url,
+        #     payload: make_payload(params),
+        #     headers: { content_type: 'application/xml' }
+        #   }.merge(options)
+        # )
+
+        # TODO use options
+        not_to_hash = opitons.delete(:not_to_hash)
+
+        uri = URI("#{GATEWAY_URL}#{url}")
+        req = Net::HTTP::Post.new(uri)
+        req.body = make_payload(params)
+        req.content_type = "application/xml"
+
+        res = Net::HTTP.start(uri.hostname, uri.port) do |http|
+          http.request(req)
+        end
+
+        if res.is_a?(Net::HTTPSuccess)
+          if not_to_hash
+            res.body
+          else
+            WxPay::Utils.xml_to_hash(res.body)
+          end
+        else
+          raise "Caught error when call weixin."
+        end
       end
     end
   end

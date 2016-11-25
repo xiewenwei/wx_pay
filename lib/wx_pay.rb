@@ -1,15 +1,24 @@
 require 'wx_pay/result'
 require 'wx_pay/sign'
+require 'wx_pay/utils'
 require 'wx_pay/service'
 require 'openssl'
 
 module WxPay
-  @extra_rest_client_options = {}
+  @extra_http_client_options = {}
   @debug_mode = true
 
   class<< self
-    attr_accessor :appid, :mch_id, :key, :appsecret, :extra_rest_client_options, :debug_mode
+    attr_accessor :appid, :mch_id, :key, :appsecret, :extra_http_client_options, :debug_mode
     attr_reader :apiclient_cert, :apiclient_key
+
+    def extra_rest_client_options
+      raise "extra_rest_client_options doesn't support now. pls use extra_http_client_options"
+    end
+
+    def extra_rest_client_options=(options)
+      raise "extra_rest_client_options doesn't support now. pls use extra_http_client_options"
+    end
 
     def set_apiclient_by_pkcs12(str, pass)
       pkcs12 = OpenSSL::PKCS12.new(str, pass)
